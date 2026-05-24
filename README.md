@@ -17,7 +17,7 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 | `KITCHEN_IMAGE_URLS` | Yes* | 1–30 image URLs: comma/newline-separated, or JSON array |
 | `KITCHEN_IMAGE_URL_1` … `_30` | Alt* | Optional numbered URLs instead of `KITCHEN_IMAGE_URLS` |
 
-\* At least one image URL required for the trigger word. Meta allows max **30 images per message**. URLs must be public HTTPS (no auth). Prefer **JPG or PNG**; WebP album sends often fail on Meta’s side—the bot automatically falls back to sending images one-by-one.
+\* At least one image URL required for the trigger word. Meta allows max **30 images per message**. URLs must be public HTTPS (no auth). Prefer **JPG or PNG** for large albums (25+). The bot pre-uploads images to Meta, then sends one album; if that fails it may fall back to separate messages.
 
 Example:
 

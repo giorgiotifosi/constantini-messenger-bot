@@ -1,4 +1,8 @@
+import { after } from "next/server";
 import { handleIncomingText } from "@/lib/messenger";
+
+/** Allow time to upload many images on Vercel (Pro: up to 60s). */
+export const maxDuration = 60;
 
 /**
  * Meta webhook verification (GET).
@@ -50,7 +54,7 @@ export async function POST(request) {
     const events = entry.messaging ?? [];
 
     for (const event of events) {
-      await processMessagingEvent(event);
+      after(() => processMessagingEvent(event));
     }
   }
 
