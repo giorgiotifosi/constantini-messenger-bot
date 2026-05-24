@@ -16,7 +16,7 @@ export default function Home() {
       </p>
       <p>
         Send the Georgian word <strong>სამზარეულო</strong> in Messenger to
-        receive three kitchen images.
+        receive up to 30 kitchen photos in one album message.
       </p>
     </main>
   );

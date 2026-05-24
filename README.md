@@ -1,6 +1,6 @@
 # Constantini Messenger Bot
 
-Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.com/docs/messenger-platform). When a user sends **სამზარეულო**, the bot replies with three image messages via the [Send API](https://developers.facebook.com/docs/messenger-platform/send-messages).
+Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.com/docs/messenger-platform). When a user sends **სამზარეულო**, the bot replies with up to **30 images in one album message** via the [Send API](https://developers.facebook.com/docs/messenger-platform/send-messages).
 
 ## Requirements
 
@@ -14,11 +14,16 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 |----------|----------|-------------|
 | `PAGE_ACCESS_TOKEN` | Yes | Page access token from Meta Developer Console |
 | `VERIFY_TOKEN` | Yes | Any secret string you choose; must match webhook setup |
-| `KITCHEN_IMAGE_URL_1` | Yes* | Public HTTPS URL for image 1 |
-| `KITCHEN_IMAGE_URL_2` | Yes* | Public HTTPS URL for image 2 |
-| `KITCHEN_IMAGE_URL_3` | Yes* | Public HTTPS URL for image 3 |
+| `KITCHEN_IMAGE_URLS` | Yes* | 1–30 image URLs: comma/newline-separated, or JSON array |
+| `KITCHEN_IMAGE_URL_1` … `_30` | Alt* | Optional numbered URLs instead of `KITCHEN_IMAGE_URLS` |
 
-\* Required when users send the trigger word. Images must be reachable by Meta’s servers (HTTPS, no auth).
+\* At least one image URL required for the trigger word. Meta allows max **30 images per message**. URLs must be public HTTPS (no auth).
+
+Example:
+
+```bash
+KITCHEN_IMAGE_URLS=https://cdn.example.com/k1.jpg,https://cdn.example.com/k2.jpg
+```
 
 Copy `.env.example` to `.env.local` for local development:
 
@@ -65,9 +70,7 @@ Follow prompts to link the project. Then add environment variables:
 ```bash
 vercel env add PAGE_ACCESS_TOKEN
 vercel env add VERIFY_TOKEN
-vercel env add KITCHEN_IMAGE_URL_1
-vercel env add KITCHEN_IMAGE_URL_2
-vercel env add KITCHEN_IMAGE_URL_3
+vercel env add KITCHEN_IMAGE_URLS
 ```
 
 Redeploy so variables take effect:
@@ -84,9 +87,7 @@ vercel --prod
 4. Open **Settings → Environment Variables** and add:
    - `PAGE_ACCESS_TOKEN`
    - `VERIFY_TOKEN`
-   - `KITCHEN_IMAGE_URL_1`
-   - `KITCHEN_IMAGE_URL_2`
-   - `KITCHEN_IMAGE_URL_3`
+   - `KITCHEN_IMAGE_URLS` (or `KITCHEN_IMAGE_URL_1` … `_30`)
 5. Deploy. Copy your production URL, e.g. `https://constantini-messenger-bot.vercel.app`.
 
 ### Configure Meta webhook after deploy
@@ -119,6 +120,6 @@ lib/
 
 1. Open your Page in Messenger and send a message to the Page.
 2. Send exactly: `სამზარეულო`
-3. You should receive three image messages in order.
+3. You should receive one album message with all configured images (up to 30).
 
 Check Vercel **Functions → Logs** if messages are not delivered.
