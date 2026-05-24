@@ -71,7 +71,7 @@ async function processMessagingEvent(event) {
     const result = await handleIncomingText(senderId, text);
     if (result.handled) {
       console.log(
-        `Sent ${result.imageCount} images to ${senderId} for trigger word`
+        `Sent ${result.imageCount} images to ${senderId} (${result.mode})`
       );
     }
   } catch (error) {
