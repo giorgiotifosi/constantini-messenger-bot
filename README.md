@@ -73,17 +73,30 @@ POST /{PAGE_ID}/subscribed_apps?subscribed_fields=messages,message_echoes,messag
 
 8. App in **Live** mode (or add testers).
 
+### Chat builder: 30 photos on chat open (no reply)
+
+The template name `სამზარეულო bot 30 ფოტო` is **not** sent to the bot. When someone clicks **Send message** on the ad:
+
+1. Meta shows the Chat builder greeting (text only).
+2. Meta sends **`messaging_referrals`** (`source: ADS`) = chat opened.
+3. The bot sends the **30-photo album** automatically (~30–60 s). **No customer message required.**
+
+Run once to link Page + webhooks:
+
+```bash
+PAGE_ACCESS_TOKEN=xxx PAGE_ID=xxx ./scripts/subscribe-page.sh
+```
+
+In Chat builder → template → **Advanced** → **Connect an app** → select this app.
+
 ### How triggering works
 
 | Source | Bot behavior |
 |--------|--------------|
-| User opens Messenger from your **Click-to-Messenger ad** | Sends album (`messaging_referrals`, `source: ADS`) |
+| **Ad click → chat opens** | Sends album immediately |
+| Chat builder greeting echo | Sends album (`message_echoes`) |
 | Inbox label **სამზარეულო bot 30 ფოტო** | Sends album (`inbox_labels`) |
-| Page sends saved reply with template text | Sends album (`message_echoes`) |
-| Customer sends **any reply** after the ad greeting | Sends album (default; set `MESSENGER_SEND_ON_ANY_MESSAGE=false` to disable) |
-| Customer types `სამზარეულო` | Also works (default keyword) |
-
-**Note:** The Chat builder template name in Ads Manager is **not** sent in the webhook. Meta sends `ad_id`, `ref`, and `ad_title` instead — use `MESSENGER_AD_REF` or `MESSENGER_AD_IDS`.
+| Customer reply | Off by default (`MESSENGER_SEND_ON_ANY_MESSAGE=true` to enable) |
 
 ## Deploy to Vercel
 
