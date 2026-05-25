@@ -14,14 +14,15 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 |----------|----------|-------------|
 | `PAGE_ACCESS_TOKEN` | Yes | Page access token from Meta Developer Console |
 | `VERIFY_TOKEN` | Yes | Any secret string you choose; must match webhook setup |
-| `MESSENGER_AD_IDS` | Yes | Comma-separated ad IDs allowed to send photos |
-| `MESSENGER_AD_REF` | No | Optional ref param (must match ad Advanced ref) |
+| `KITCHEN_BUTTON_LABEL` | No | Chat builder button text (default **სამზარეულო**) — tap sends photos |
+| `MESSENGER_AD_IDS` | No | Optional: only these ad IDs trigger photos on **chat open** |
+| `MESSENGER_AD_REF` | No | Optional ref param for chat-open filter |
 | `MESSENGER_AD_TITLE_KEYWORD` | No | Optional: match `ad_title` from webhook |
-| `MESSENGER_AD_SEND_ON_ALL` | No | `true` = all ads (default is **specific ads only**) |
+| `MESSENGER_AD_SEND_ON_ALL` | No | `true` = photos on every ad chat open |
 | `SAVED_TEMPLATE_LABEL` | No | Inbox label name (optional) |
 | `KITCHEN_IMAGE_URLS` | Yes* | 1–30 image URLs: comma/newline-separated, or JSON array |
 | `SAVED_TEMPLATE_ECHO_TEXT` | No | Text the Page sends with saved reply (defaults to label name) |
-| `KITCHEN_TEXT_TRIGGER` | No | Optional: also send when customer types this word |
+| `KITCHEN_TEXT_TRIGGER` | No | Alias for button label if customer types instead of taps |
 | `KITCHEN_IMAGE_URL_1` … `_30` | Alt* | Optional numbered URLs instead of `KITCHEN_IMAGE_URLS` |
 
 \* At least one image URL required. Meta allows max **30 images per message**. Prefer **JPG or PNG** for large albums.
@@ -66,24 +67,21 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
    - **message_echoes** — when Meta sends the Chat builder greeting from your Page
    - **inbox_labels** (optional, for Inbox labels only)
 5. **Ads Manager → Engagement ad → Chat builder**:
-   - Open the template → **Advanced** (if shown) → **Connect an app** → select this app.
-   - Without **Connect app**, Meta sends the greeting itself; your bot only sees webhooks when the **customer replies** (any text → album by default).
+   - Add a button labeled **სამზარეულო** (or set `KITCHEN_BUTTON_LABEL`).
+   - Subscribe to **messaging_postbacks** (included in subscribe script below).
+   - **Connect an app** (Advanced) is optional — photos send when the user **taps the button**, no `MESSENGER_AD_IDS` required.
 6. **Page must use this app**: Meta App → Messenger → connect your Facebook Page (Generate token for that Page).
 7. Subscribe the Page to webhooks (Graph API Explorer):
 
 ```http
-POST /{PAGE_ID}/subscribed_apps?subscribed_fields=messages,message_echoes,messaging_referrals,messaging_optins,messaging_postbacks
+POST /{PAGE_ID}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,message_echoes,messaging_referrals,messaging_optins
 ```
 
 8. App in **Live** mode (or add testers).
 
-### Chat builder: 30 photos on chat open (no reply)
+### Default: photos when user taps **სამზარეულო**
 
-The template name `სამზარეულო bot 30 ფოტო` is **not** sent to the bot. When someone clicks **Send message** on the ad:
-
-1. Meta shows the Chat builder greeting (text only).
-2. Meta sends **`messaging_referrals`** (`source: ADS`) = chat opened.
-3. The bot sends the **30-photo album** automatically (~30–60 s). **No customer message required.**
+No `MESSENGER_AD_IDS` needed. When the customer taps the Chat builder button (or sends that text), the bot sends kitchen photos **one per message** (~1–2 min for 30).
 
 Run once to link Page + webhooks:
 
@@ -91,29 +89,19 @@ Run once to link Page + webhooks:
 PAGE_ACCESS_TOKEN=xxx PAGE_ID=xxx ./scripts/subscribe-page.sh
 ```
 
-In Chat builder → template → **Advanced** → **Connect an app** → select this app.
+### Optional: photos on ad chat open
 
-### Allowed ads only
-
-Photos send **only** if the webhook `ad_id` is listed in `MESSENGER_AD_IDS`, or `ref` matches `MESSENGER_AD_REF`.
-
-Find ad ID in Ads Manager: open the ad → URL contains `selected_ad_ids=**123456789**` or use the numeric ad ID from the ad editor.
-
-```bash
-MESSENGER_AD_IDS=111111111,222222222
-```
-
-Other Click-to-Messenger ads → **no photos** (logged as `Referral ignored`).
+Set `MESSENGER_AD_IDS`, `MESSENGER_AD_REF`, or `MESSENGER_AD_SEND_ON_ALL=true` if you also want photos **before** the button tap (requires **Connect app** + `messaging_referrals`).
 
 ### How triggering works
 
 | Source | Bot behavior |
 |--------|--------------|
-| **Listed ad** click → chat opens | Sends photos **one per message** (~1–2 min for 30) |
-| Other ads | Ignored |
-| Greeting echo | Off by default (set `MESSENGER_AD_GREETING_ECHO=true` to enable) |
+| Tap / type **სამზარეულო** | Sends photos (default) |
+| Ad chat open | Only if `MESSENGER_AD_IDS` / ref / `MESSENGER_AD_SEND_ON_ALL` set |
+| Greeting echo | Off (`MESSENGER_AD_GREETING_ECHO=true` to enable) |
 | Inbox label | Optional (`inbox_labels`) |
-| Customer reply | Off (`MESSENGER_SEND_ON_ANY_MESSAGE=true` to enable) |
+| Any customer message | Off (`MESSENGER_SEND_ON_ANY_MESSAGE=true` to enable) |
 
 ## Deploy to Vercel
 
