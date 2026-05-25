@@ -1,5 +1,12 @@
 import { after } from "next/server";
-import { handleIncomingText } from "@/lib/messenger";
+import { sendKitchenAlbumToUser } from "@/lib/messenger";
+import {
+  getSavedTemplateLabelName,
+  isKitchenTextTrigger,
+  isLabelAssignmentAction,
+  isSavedTemplateEcho,
+  isSavedTemplateLabel,
+} from "@/lib/triggers";
 
 /** Allow time to upload many images on Vercel (Pro: up to 60s). */
 export const maxDuration = 60;
@@ -51,9 +58,13 @@ export async function POST(request) {
   const entries = body.entry ?? [];
 
   for (const entry of entries) {
-    const events = entry.messaging ?? [];
+    for (const change of entry.changes ?? []) {
+      if (change.field === "inbox_labels") {
+        after(() => processInboxLabelChange(change.value));
+      }
+    }
 
-    for (const event of events) {
+    for (const event of entry.messaging ?? []) {
       after(() => processMessagingEvent(event));
     }
   }
@@ -61,24 +72,83 @@ export async function POST(request) {
   return new Response("EVENT_RECEIVED", { status: 200 });
 }
 
+/**
+ * Meta Inbox label assigned to a conversation.
+ * @see https://developers.facebook.com/docs/messenger-platform/identity/custom-labels
+ */
+async function processInboxLabelChange(value) {
+  const psid = value?.user?.id;
+  const labelName = value?.label?.page_label_name;
+  const action = value?.action;
+
+  if (!psid || !labelName) return;
+
+  if (!isLabelAssignmentAction(action)) {
+    console.log(`Label change ignored (action=${action}) for ${psid}`);
+    return;
+  }
+
+  if (!isSavedTemplateLabel(labelName)) return;
+
+  try {
+    const result = await sendKitchenAlbumToUser(psid, {
+      trigger: "inbox_label",
+    });
+    console.log(
+      `Label "${getSavedTemplateLabelName()}" → sent ${result.imageCount} images to ${psid} (${result.mode})`
+    );
+  } catch (error) {
+    console.error("Failed to send photos for inbox label:", error.message);
+  }
+}
+
 async function processMessagingEvent(event) {
+  const message = event.message;
+  if (!message) return;
+
+  const isEcho = Boolean(message.is_echo);
+
+  if (isEcho) {
+    await processPageEcho(event);
+    return;
+  }
+
   const senderId = event.sender?.id;
   if (!senderId) return;
 
-  const message = event.message;
-  if (!message || message.is_echo) return;
-
   const text = message.text;
-  if (!text) return;
+  if (!text || !isKitchenTextTrigger(text)) return;
 
   try {
-    const result = await handleIncomingText(senderId, text);
-    if (result.handled) {
-      console.log(
-        `Sent ${result.imageCount} images to ${senderId} (${result.mode})`
-      );
-    }
+    const result = await sendKitchenAlbumToUser(senderId, {
+      trigger: "customer_text",
+    });
+    console.log(
+      `Text trigger → sent ${result.imageCount} images to ${senderId} (${result.mode})`
+    );
   } catch (error) {
-    console.error("Failed to handle message:", error.message);
+    console.error("Failed to handle customer text:", error.message);
+  }
+}
+
+/**
+ * Page sent a message (e.g. saved reply template from Inbox).
+ */
+async function processPageEcho(event) {
+  const recipientId = event.recipient?.id;
+  const text = event.message?.text;
+
+  if (!recipientId || !text) return;
+  if (!isSavedTemplateEcho(text)) return;
+
+  try {
+    const result = await sendKitchenAlbumToUser(recipientId, {
+      trigger: "saved_reply_echo",
+    });
+    console.log(
+      `Saved reply echo → sent ${result.imageCount} images to ${recipientId} (${result.mode})`
+    );
+  } catch (error) {
+    console.error("Failed to handle saved reply echo:", error.message);
   }
 }

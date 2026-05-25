@@ -1,6 +1,6 @@
 # Constantini Messenger Bot
 
-Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.com/docs/messenger-platform). When a user sends **სამზარეულო**, the bot replies with up to **30 images in one album message** via the [Send API](https://developers.facebook.com/docs/messenger-platform/send-messages).
+Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.com/docs/messenger-platform). When a chat gets the Meta Inbox label **სამზარეულო bot 30 ფოტო** (or the Page sends that saved reply), the bot sends up to **30 images in one album** via the [Send API](https://developers.facebook.com/docs/messenger-platform/send-messages).
 
 ## Requirements
 
@@ -14,10 +14,13 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 |----------|----------|-------------|
 | `PAGE_ACCESS_TOKEN` | Yes | Page access token from Meta Developer Console |
 | `VERIFY_TOKEN` | Yes | Any secret string you choose; must match webhook setup |
+| `SAVED_TEMPLATE_LABEL` | Yes | Meta Inbox label name (default: `სამზარეულო bot 30 ფოტო`) |
 | `KITCHEN_IMAGE_URLS` | Yes* | 1–30 image URLs: comma/newline-separated, or JSON array |
+| `SAVED_TEMPLATE_ECHO_TEXT` | No | Text the Page sends with saved reply (defaults to label name) |
+| `KITCHEN_TEXT_TRIGGER` | No | Optional: also send when customer types this word |
 | `KITCHEN_IMAGE_URL_1` … `_30` | Alt* | Optional numbered URLs instead of `KITCHEN_IMAGE_URLS` |
 
-\* At least one image URL required for the trigger word. Meta allows max **30 images per message**. URLs must be public HTTPS (no auth). Prefer **JPG or PNG** for large albums (25+). The bot pre-uploads images to Meta, then sends one album; if that fails it may fall back to separate messages.
+\* At least one image URL required. Meta allows max **30 images per message**. Prefer **JPG or PNG** for large albums.
 
 Example:
 
@@ -53,8 +56,22 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
 3. Under **Messenger → Settings → Webhooks**, click **Add Callback URL**:
    - **Callback URL**: `https://<your-domain>/api/webhook`
    - **Verify token**: same value as `VERIFY_TOKEN`
-4. Subscribe to webhook fields: at minimum **messages**.
-5. Ensure your app is in **Live** mode (or add testers) so real users can message the Page.
+4. Subscribe to webhook fields:
+   - **messages** — customer messages (optional text trigger)
+   - **message_echoes** — when the Page sends the saved reply
+   - **inbox_labels** — when the Inbox label/template is applied to a chat
+5. In Meta Business Suite / Page Inbox, create a **label** named exactly `სამზარეულო bot 30 ფოტო` (same as `SAVED_TEMPLATE_LABEL`), or use a saved reply with that name.
+6. Ensure your app is in **Live** mode (or add testers) so real users can message the Page.
+
+### How triggering works
+
+| Action in Meta Inbox | Bot behavior |
+|----------------------|--------------|
+| Assign label **სამზარეულო bot 30 ფოტო** to a chat | Sends 30-photo album to that customer |
+| Page sends saved reply with that template text | Sends album (`message_echoes`) |
+| Customer types `სამზარეულო` | Only if `KITCHEN_TEXT_TRIGGER` is set |
+
+Selecting a template in the composer only tags the thread when Meta applies the matching **label** — subscribe to **inbox_labels** so the bot is notified.
 
 ## Deploy to Vercel
 
@@ -113,13 +130,14 @@ app/
   layout.js
   page.js
 lib/
-  messenger.js           # Send API helpers + trigger logic
+  messenger.js           # Send API + album upload
+  triggers.js            # Label / saved reply matching
 ```
 
 ## Testing
 
 1. Open your Page in Messenger and send a message to the Page.
-2. Send exactly: `სამზარეულო`
-3. You should receive one album message with all configured images (up to 30).
+2. In Page Inbox, assign the label **სამზარეულო bot 30 ფოტო** to the conversation (or send that saved reply).
+3. The customer should receive one album with all configured images (up to 30).
 
 Check Vercel **Functions → Logs** if messages are not delivered.
