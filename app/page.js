@@ -17,7 +17,7 @@ export default function Home() {
       <p>
         Opens from your Click-to-Messenger ad, Inbox label{" "}
         <strong>სამზარეულო bot 30 ფოტო</strong>, or saved reply — up to 30
-        kitchen photos in one album.
+        kitchen photos (one message per photo).
       </p>
     </main>
   );
