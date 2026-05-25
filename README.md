@@ -103,6 +103,20 @@ Set `MESSENGER_AD_IDS`, `MESSENGER_AD_REF`, or `MESSENGER_AD_SEND_ON_ALL=true` i
 | Inbox label | Optional (`inbox_labels`) |
 | Any customer message | Off (`MESSENGER_SEND_ON_ANY_MESSAGE=true` to enable) |
 
+### Preview / admin testing (photos work for you but not a friend)
+
+| Situation | What happens |
+|-----------|----------------|
+| **Ads Manager → Preview** on a phone | Meta often **does not** call your webhook (or only shows the greeting). This is a Meta limitation, not a bot bug. |
+| App in **Development** mode | Automated replies go only to people with a role on the **Meta app** (Admin / Developer / **Tester**). A **Page admin** who is not an **App Tester** may see no photos. |
+| Photos only after **სამზარეულო** tap | Opening the chat alone is not enough if `MESSENGER_AD_IDS` is unset. The friend must **tap the button** (or type the same word). |
+
+**Reliable test:** use a normal Facebook account (not only Page admin), open the **live** ad from the feed (not Preview), tap **სამზარეულო**, wait ~1–2 min for 30 messages.
+
+**Fix for a Page-admin friend:** Meta Developer Console → your app → **App roles** → add their Facebook account as **Tester**, or switch the app to **Live** mode.
+
+Check Vercel **Logs** when they tap: you should see `Kitchen button postback →` or `Postback ignored` with the real button title.
+
 ## Deploy to Vercel
 
 ### Option A: Vercel CLI
@@ -125,6 +139,11 @@ Redeploy so variables take effect:
 ```bash
 vercel --prod
 ```
+
+Production URL example: `https://constantini-messenger-bot.vercel.app`
+
+- Webhook: `https://constantini-messenger-bot.vercel.app/api/webhook`
+- Privacy policy (Meta **App settings → Basic**): `https://constantini-messenger-bot.vercel.app/privacy`
 
 ### Option B: Vercel Dashboard
 

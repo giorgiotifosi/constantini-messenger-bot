@@ -15,9 +15,11 @@ export default function Home() {
         <code>/api/webhook</code>
       </p>
       <p>
-        Opens from your Click-to-Messenger ad, Inbox label{" "}
-        <strong>სამზარეულო bot 30 ფოტო</strong>, or saved reply — up to 30
-        kitchen photos (one message per photo).
+        Opens from your Click-to-Messenger ad — tap <strong>სამზარეულო</strong>{" "}
+        to receive up to 30 kitchen photos (one message per photo).
+      </p>
+      <p>
+        <a href="/privacy">Privacy Policy</a>
       </p>
     </main>
   );
