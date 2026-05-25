@@ -109,7 +109,7 @@ Other Click-to-Messenger ads → **no photos** (logged as `Referral ignored`).
 
 | Source | Bot behavior |
 |--------|--------------|
-| **Listed ad** click → chat opens | Sends album (~30–60 s) |
+| **Listed ad** click → chat opens | Sends photos **one per message** (~1–2 min for 30) |
 | Other ads | Ignored |
 | Greeting echo | Off by default (set `MESSENGER_AD_GREETING_ECHO=true` to enable) |
 | Inbox label | Optional (`inbox_labels`) |
