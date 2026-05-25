@@ -61,8 +61,17 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
    - **messaging_referrals**
    - **message_echoes** — when Meta sends the Chat builder greeting from your Page
    - **inbox_labels** (optional, for Inbox labels only)
-5. **Ads Manager Chat builder**: connect this app to the Page in the ad. Template name `სამზარეულო bot 30 ფოტო` is **not** sent to the bot — it reacts to **ad click** (`messaging_referrals`) and/or the **greeting text** in `message_echoes` (contains „სამზარეულო“).
-6. Ensure your app is in **Live** mode (or add testers).
+5. **Ads Manager → Engagement ad → Chat builder**:
+   - Open the template → **Advanced** (if shown) → **Connect an app** → select this app.
+   - Without **Connect app**, Meta sends the greeting itself; your bot only sees webhooks when the **customer replies** (any text → album by default).
+6. **Page must use this app**: Meta App → Messenger → connect your Facebook Page (Generate token for that Page).
+7. Subscribe the Page to webhooks (Graph API Explorer):
+
+```http
+POST /{PAGE_ID}/subscribed_apps?subscribed_fields=messages,message_echoes,messaging_referrals,messaging_optins,messaging_postbacks
+```
+
+8. App in **Live** mode (or add testers).
 
 ### How triggering works
 
@@ -71,7 +80,8 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
 | User opens Messenger from your **Click-to-Messenger ad** | Sends album (`messaging_referrals`, `source: ADS`) |
 | Inbox label **სამზარეულო bot 30 ფოტო** | Sends album (`inbox_labels`) |
 | Page sends saved reply with template text | Sends album (`message_echoes`) |
-| Customer types trigger word | Only if `KITCHEN_TEXT_TRIGGER` is set |
+| Customer sends **any reply** after the ad greeting | Sends album (default; set `MESSENGER_SEND_ON_ANY_MESSAGE=false` to disable) |
+| Customer types `სამზარეულო` | Also works (default keyword) |
 
 **Note:** The Chat builder template name in Ads Manager is **not** sent in the webhook. Meta sends `ad_id`, `ref`, and `ad_title` instead — use `MESSENGER_AD_REF` or `MESSENGER_AD_IDS`.
 
