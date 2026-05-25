@@ -66,9 +66,9 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
    - **messaging_referrals**
    - **message_echoes** — when Meta sends the Chat builder greeting from your Page
    - **inbox_labels** (optional, for Inbox labels only)
-5. **Ads Manager → Engagement ad → Chat builder**:
-   - Open the template → **Advanced** (if shown) → **Connect an app** → select this app.
-   - Without **Connect app**, Meta sends the greeting itself; your bot only sees webhooks when the **customer replies** (any text → album by default).
+5. **Ads Manager → Engagement ad → Chat builder** (required for instant photos):
+   - Template → **Advanced** → **Connect an app** → select this Meta app.
+   - **Without Connect app**, Meta does **not** send `messaging_referrals` or `message_echoes` on chat open — webhooks arrive only when the customer **taps a button** (e.g. „სამზარეულო”). The bot **ignores** button taps; photos send on **chat open** only.
 6. **Page must use this app**: Meta App → Messenger → connect your Facebook Page (Generate token for that Page).
 7. Subscribe the Page to webhooks (Graph API Explorer):
 
@@ -113,7 +113,7 @@ Other Click-to-Messenger ads → **no photos** (logged as `Referral ignored`).
 | **Listed ad** click → chat opens | `messaging_referrals` → photos immediately (no tap) |
 | Chat builder greeting (Page echo) | Default **on** — send when thread opens (`message_echoes`) |
 | Other ads | Ignored (unless `MESSENGER_AD_SEND_ON_ALL=true`) |
-| Button / quick reply `სამზარეულო` | **Ignored** (no send on tap) |
+| Button / quick reply `სამზარეულო` | **Ignored** — do not rely on the button; use Connect app + referrals/echo |
 | Customer types keyword | Off unless you set `KITCHEN_TEXT_TRIGGER` |
 | Inbox label | Optional (`inbox_labels`) |
 
