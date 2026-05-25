@@ -21,8 +21,7 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 | `SAVED_TEMPLATE_LABEL` | No | Inbox label name (optional) |
 | `KITCHEN_IMAGE_URLS` | Yes* | 1–30 image URLs: comma/newline-separated, or JSON array |
 | `SAVED_TEMPLATE_ECHO_TEXT` | No | Text the Page sends with saved reply (defaults to label name) |
-| `KITCHEN_TEXT_TRIGGER` | No | Optional: send when customer **types** this word (off by default) |
-| `MESSENGER_AD_GREETING_ECHO` | No | `false` to disable send on Chat builder greeting (default **on**) |
+| `KITCHEN_TEXT_TRIGGER` | No | Optional: also send when customer types this word |
 | `KITCHEN_IMAGE_URL_1` … `_30` | Alt* | Optional numbered URLs instead of `KITCHEN_IMAGE_URLS` |
 
 \* At least one image URL required. Meta allows max **30 images per message**. Prefer **JPG or PNG** for large albums.
@@ -66,9 +65,9 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
    - **messaging_referrals**
    - **message_echoes** — when Meta sends the Chat builder greeting from your Page
    - **inbox_labels** (optional, for Inbox labels only)
-5. **Ads Manager → Engagement ad → Chat builder** (required for instant photos):
-   - Template → **Advanced** → **Connect an app** → select this Meta app.
-   - **Without Connect app**, Meta does **not** send `messaging_referrals` or `message_echoes` on chat open — webhooks arrive only when the customer **taps a button** (e.g. „სამზარეულო”). The bot **ignores** button taps; photos send on **chat open** only.
+5. **Ads Manager → Engagement ad → Chat builder**:
+   - Open the template → **Advanced** (if shown) → **Connect an app** → select this app.
+   - Without **Connect app**, Meta sends the greeting itself; your bot only sees webhooks when the **customer replies** (any text → album by default).
 6. **Page must use this app**: Meta App → Messenger → connect your Facebook Page (Generate token for that Page).
 7. Subscribe the Page to webhooks (Graph API Explorer):
 
@@ -110,12 +109,11 @@ Other Click-to-Messenger ads → **no photos** (logged as `Referral ignored`).
 
 | Source | Bot behavior |
 |--------|--------------|
-| **Listed ad** click → chat opens | `messaging_referrals` → photos immediately (no tap) |
-| Chat builder greeting (Page echo) | Default **on** — send when thread opens (`message_echoes`) |
-| Other ads | Ignored (unless `MESSENGER_AD_SEND_ON_ALL=true`) |
-| Button / quick reply `სამზარეულო` | **Ignored** — do not rely on the button; use Connect app + referrals/echo |
-| Customer types keyword | Off unless you set `KITCHEN_TEXT_TRIGGER` |
+| **Listed ad** click → chat opens | Sends photos **one per message** (~1–2 min for 30) |
+| Other ads | Ignored |
+| Greeting echo | Off by default (set `MESSENGER_AD_GREETING_ECHO=true` to enable) |
 | Inbox label | Optional (`inbox_labels`) |
+| Customer reply | Off (`MESSENGER_SEND_ON_ANY_MESSAGE=true` to enable) |
 
 ## Deploy to Vercel
 
