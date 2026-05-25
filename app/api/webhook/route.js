@@ -2,6 +2,7 @@ import { waitUntil } from "@vercel/functions";
 import { sendKitchenAlbumOnChatOpen } from "@/lib/messenger";
 import {
   formatReferralForLog,
+  getAdReferralSkipReason,
   getSavedTemplateLabelName,
   isChatOpenReferral,
   isKitchenTextTrigger,
@@ -10,6 +11,7 @@ import {
   isSavedTemplateEcho,
   isSavedTemplateLabel,
   shouldSendOnAnyCustomerMessage,
+  shouldSendOnGreetingEcho,
 } from "@/lib/triggers";
 
 /** Allow time to upload many images on Vercel (Pro: up to 60s). */
@@ -122,7 +124,9 @@ async function processMessagingEvent(event) {
       await handleChatOpen(psid, "ad_referral", "matched");
       if (!event.message) return;
     } else {
-      console.log(`Referral open but filters not matched for ${psid}`);
+      console.log(
+        `Referral ignored for ${psid}: ${getAdReferralSkipReason(referral)}`
+      );
     }
   }
 
@@ -145,12 +149,21 @@ async function processMessagingEvent(event) {
   if (message.is_echo) {
     const recipientId = event.recipient?.id;
     const text = message.text;
-    if (recipientId && text && isSavedTemplateEcho(text)) {
+    if (
+      recipientId &&
+      text &&
+      shouldSendOnGreetingEcho() &&
+      isSavedTemplateEcho(text)
+    ) {
       console.log(`Chat builder echo → ${recipientId}`);
       await sendAlbumSafe(
         recipientId,
         "chat_builder_echo",
         "greeting echo"
+      );
+    } else if (recipientId && text) {
+      console.log(
+        `Greeting echo skipped for ${recipientId} (strict: use MESSENGER_AD_IDS)`
       );
     }
     return;

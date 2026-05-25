@@ -14,7 +14,11 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 |----------|----------|-------------|
 | `PAGE_ACCESS_TOKEN` | Yes | Page access token from Meta Developer Console |
 | `VERIFY_TOKEN` | Yes | Any secret string you choose; must match webhook setup |
-| `SAVED_TEMPLATE_LABEL` | Yes | Meta Inbox label name (default: `სამზარეულო bot 30 ფოტო`) |
+| `MESSENGER_AD_IDS` | Yes | Comma-separated ad IDs allowed to send photos |
+| `MESSENGER_AD_REF` | No | Optional ref param (must match ad Advanced ref) |
+| `MESSENGER_AD_TITLE_KEYWORD` | No | Optional: match `ad_title` from webhook |
+| `MESSENGER_AD_SEND_ON_ALL` | No | `true` = all ads (default is **specific ads only**) |
+| `SAVED_TEMPLATE_LABEL` | No | Inbox label name (optional) |
 | `KITCHEN_IMAGE_URLS` | Yes* | 1–30 image URLs: comma/newline-separated, or JSON array |
 | `SAVED_TEMPLATE_ECHO_TEXT` | No | Text the Page sends with saved reply (defaults to label name) |
 | `KITCHEN_TEXT_TRIGGER` | No | Optional: also send when customer types this word |
@@ -89,14 +93,27 @@ PAGE_ACCESS_TOKEN=xxx PAGE_ID=xxx ./scripts/subscribe-page.sh
 
 In Chat builder → template → **Advanced** → **Connect an app** → select this app.
 
+### Allowed ads only
+
+Photos send **only** if the webhook `ad_id` is listed in `MESSENGER_AD_IDS`, or `ref` matches `MESSENGER_AD_REF`.
+
+Find ad ID in Ads Manager: open the ad → URL contains `selected_ad_ids=**123456789**` or use the numeric ad ID from the ad editor.
+
+```bash
+MESSENGER_AD_IDS=111111111,222222222
+```
+
+Other Click-to-Messenger ads → **no photos** (logged as `Referral ignored`).
+
 ### How triggering works
 
 | Source | Bot behavior |
 |--------|--------------|
-| **Ad click → chat opens** | Sends album immediately |
-| Chat builder greeting echo | Sends album (`message_echoes`) |
-| Inbox label **სამზარეულო bot 30 ფოტო** | Sends album (`inbox_labels`) |
-| Customer reply | Off by default (`MESSENGER_SEND_ON_ANY_MESSAGE=true` to enable) |
+| **Listed ad** click → chat opens | Sends album (~30–60 s) |
+| Other ads | Ignored |
+| Greeting echo | Off by default (set `MESSENGER_AD_GREETING_ECHO=true` to enable) |
+| Inbox label | Optional (`inbox_labels`) |
+| Customer reply | Off (`MESSENGER_SEND_ON_ANY_MESSAGE=true` to enable) |
 
 ## Deploy to Vercel
 
