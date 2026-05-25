@@ -56,12 +56,12 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
 3. Under **Messenger → Settings → Webhooks**, click **Add Callback URL**:
    - **Callback URL**: `https://<your-domain>/api/webhook`
    - **Verify token**: same value as `VERIFY_TOKEN`
-4. Subscribe to webhook fields:
+4. Subscribe to webhook fields (all required for Chat builder ads):
    - **messages**
-   - **messaging_referrals** — Click-to-Messenger ads (Ads Manager Chat builder)
-   - **message_echoes** — Page saved reply (optional)
-   - **inbox_labels** — Page Inbox label (optional)
-5. **Ads Manager Chat builder** (your screenshot): connect this app to the Page in the ad’s Messenger settings, then set referral ref `kitchen30` in the ad (if available) and add `MESSENGER_AD_REF=kitchen30` on Vercel. Or set `MESSENGER_AD_SEND_ON_ALL=true` while testing a single kitchen ad.
+   - **messaging_referrals**
+   - **message_echoes** — when Meta sends the Chat builder greeting from your Page
+   - **inbox_labels** (optional, for Inbox labels only)
+5. **Ads Manager Chat builder**: connect this app to the Page in the ad. Template name `სამზარეულო bot 30 ფოტო` is **not** sent to the bot — it reacts to **ad click** (`messaging_referrals`) and/or the **greeting text** in `message_echoes` (contains „სამზარეულო“).
 6. Ensure your app is in **Live** mode (or add testers).
 
 ### How triggering works

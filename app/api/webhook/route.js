@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { sendKitchenAlbumToUser } from "@/lib/messenger";
 import {
+  formatReferralForLog,
   getSavedTemplateLabelName,
   isKitchenTextTrigger,
   isLabelAssignmentAction,
@@ -57,16 +58,17 @@ export async function POST(request) {
   }
 
   const entries = body.entry ?? [];
+  const sentToPsids = new Set();
 
   for (const entry of entries) {
     for (const change of entry.changes ?? []) {
       if (change.field === "inbox_labels") {
-        after(() => processInboxLabelChange(change.value));
+        after(() => processInboxLabelChange(change.value, sentToPsids));
       }
     }
 
     for (const event of entry.messaging ?? []) {
-      after(() => processMessagingEvent(event));
+      after(() => processMessagingEvent(event, sentToPsids));
     }
   }
 
@@ -75,9 +77,8 @@ export async function POST(request) {
 
 /**
  * Meta Inbox label assigned to a conversation.
- * @see https://developers.facebook.com/docs/messenger-platform/identity/custom-labels
  */
-async function processInboxLabelChange(value) {
+async function processInboxLabelChange(value, sentToPsids) {
   const psid = value?.user?.id;
   const labelName = value?.label?.page_label_name;
   const action = value?.action;
@@ -91,33 +92,38 @@ async function processInboxLabelChange(value) {
 
   if (!isSavedTemplateLabel(labelName)) return;
 
-  await sendAlbumSafe(psid, "inbox_label", `Label "${getSavedTemplateLabelName()}"`);
+  await sendAlbumSafe(
+    psid,
+    "inbox_label",
+    `Label "${getSavedTemplateLabelName()}"`,
+    sentToPsids
+  );
 }
 
 /**
- * Click-to-Messenger ad / m.me referral (Ads Manager Chat builder).
- * @see https://developers.facebook.com/docs/messenger-platform/reference/webhook-events/messaging_referrals
+ * Click-to-Messenger ad / m.me referral.
  */
-async function processMessagingReferral(event) {
+async function processMessagingReferral(event, sentToPsids) {
   const psid = event.sender?.id;
   const referral = event.referral ?? event.postback?.referral;
 
   if (!psid || !referral) return;
+
+  console.log(`Referral event for ${psid}: ${formatReferralForLog(referral)}`);
+
   if (!isMatchingAdReferral(referral)) {
-    console.log(
-      `Ad referral ignored for ${psid} (source=${referral.source}, ad_id=${referral.ad_id ?? "n/a"})`
-    );
+    console.log(`Ad referral ignored for ${psid}`);
     return;
   }
 
-  await sendAlbumSafe(psid, "ad_referral", "Click-to-Messenger ad");
+  await sendAlbumSafe(psid, "ad_referral", "Click-to-Messenger ad", sentToPsids);
 }
 
-async function processMessagingEvent(event) {
+async function processMessagingEvent(event, sentToPsids) {
   const senderId = event.sender?.id;
 
   if (senderId && (event.referral || event.postback?.referral)) {
-    await processMessagingReferral(event);
+    await processMessagingReferral(event, sentToPsids);
   }
 
   if (event.postback && !event.message) {
@@ -130,42 +136,65 @@ async function processMessagingEvent(event) {
   const isEcho = Boolean(message.is_echo);
 
   if (isEcho) {
-    await processPageEcho(event);
+    await processPageEcho(event, sentToPsids);
     return;
   }
 
   if (!senderId) return;
 
   if (message.referral && isMatchingAdReferral(message.referral)) {
-    await sendAlbumSafe(senderId, "ad_referral_message", "Ad referral on first message");
+    await sendAlbumSafe(
+      senderId,
+      "ad_referral_message",
+      "Ad referral on first message",
+      sentToPsids
+    );
     return;
   }
 
   const text = message.text;
   if (!text || !isKitchenTextTrigger(text)) return;
 
-  await sendAlbumSafe(senderId, "customer_text", "Customer text trigger");
+  await sendAlbumSafe(senderId, "customer_text", "Customer text trigger", sentToPsids);
 }
 
 /**
- * Page sent a message (e.g. saved reply template from Inbox).
+ * Page sent a message — Chat builder greeting or saved reply (needs message_echoes).
  */
-async function processPageEcho(event) {
+async function processPageEcho(event, sentToPsids) {
   const recipientId = event.recipient?.id;
   const text = event.message?.text;
 
   if (!recipientId || !text) return;
+
+  console.log(
+    `Page echo to ${recipientId}: ${text.slice(0, 80)}${text.length > 80 ? "…" : ""}`
+  );
+
   if (!isSavedTemplateEcho(text)) return;
 
-  await sendAlbumSafe(recipientId, "saved_reply_echo", "Saved reply echo");
+  await sendAlbumSafe(
+    recipientId,
+    "chat_builder_echo",
+    "Chat builder / saved reply greeting",
+    sentToPsids
+  );
 }
 
 /**
  * @param {string} psid
  * @param {string} trigger
  * @param {string} label
+ * @param {Set<string>} sentToPsids
  */
-async function sendAlbumSafe(psid, trigger, label) {
+async function sendAlbumSafe(psid, trigger, label, sentToPsids) {
+  if (sentToPsids.has(psid)) {
+    console.log(`Skip duplicate album for ${psid} (${trigger})`);
+    return;
+  }
+
+  sentToPsids.add(psid);
+
   try {
     const result = await sendKitchenAlbumToUser(psid, { trigger });
     console.log(
@@ -173,5 +202,6 @@ async function sendAlbumSafe(psid, trigger, label) {
     );
   } catch (error) {
     console.error(`Failed (${trigger}) for ${psid}:`, error.message);
+    sentToPsids.delete(psid);
   }
 }
