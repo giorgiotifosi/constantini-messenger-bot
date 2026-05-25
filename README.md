@@ -57,21 +57,23 @@ Use `https://<your-ngrok-host>/api/webhook` as the webhook URL in Meta.
    - **Callback URL**: `https://<your-domain>/api/webhook`
    - **Verify token**: same value as `VERIFY_TOKEN`
 4. Subscribe to webhook fields:
-   - **messages** — customer messages (optional text trigger)
-   - **message_echoes** — when the Page sends the saved reply
-   - **inbox_labels** — when the Inbox label/template is applied to a chat
-5. In Meta Business Suite / Page Inbox, create a **label** named exactly `სამზარეულო bot 30 ფოტო` (same as `SAVED_TEMPLATE_LABEL`), or use a saved reply with that name.
-6. Ensure your app is in **Live** mode (or add testers) so real users can message the Page.
+   - **messages**
+   - **messaging_referrals** — Click-to-Messenger ads (Ads Manager Chat builder)
+   - **message_echoes** — Page saved reply (optional)
+   - **inbox_labels** — Page Inbox label (optional)
+5. **Ads Manager Chat builder** (your screenshot): connect this app to the Page in the ad’s Messenger settings, then set referral ref `kitchen30` in the ad (if available) and add `MESSENGER_AD_REF=kitchen30` on Vercel. Or set `MESSENGER_AD_SEND_ON_ALL=true` while testing a single kitchen ad.
+6. Ensure your app is in **Live** mode (or add testers).
 
 ### How triggering works
 
-| Action in Meta Inbox | Bot behavior |
-|----------------------|--------------|
-| Assign label **სამზარეულო bot 30 ფოტო** to a chat | Sends 30-photo album to that customer |
-| Page sends saved reply with that template text | Sends album (`message_echoes`) |
-| Customer types `სამზარეულო` | Only if `KITCHEN_TEXT_TRIGGER` is set |
+| Source | Bot behavior |
+|--------|--------------|
+| User opens Messenger from your **Click-to-Messenger ad** | Sends album (`messaging_referrals`, `source: ADS`) |
+| Inbox label **სამზარეულო bot 30 ფოტო** | Sends album (`inbox_labels`) |
+| Page sends saved reply with template text | Sends album (`message_echoes`) |
+| Customer types trigger word | Only if `KITCHEN_TEXT_TRIGGER` is set |
 
-Selecting a template in the composer only tags the thread when Meta applies the matching **label** — subscribe to **inbox_labels** so the bot is notified.
+**Note:** The Chat builder template name in Ads Manager is **not** sent in the webhook. Meta sends `ad_id`, `ref`, and `ad_title` instead — use `MESSENGER_AD_REF` or `MESSENGER_AD_IDS`.
 
 ## Deploy to Vercel
 

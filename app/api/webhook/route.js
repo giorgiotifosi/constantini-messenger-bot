@@ -4,6 +4,7 @@ import {
   getSavedTemplateLabelName,
   isKitchenTextTrigger,
   isLabelAssignmentAction,
+  isMatchingAdReferral,
   isSavedTemplateEcho,
   isSavedTemplateLabel,
 } from "@/lib/triggers";
@@ -90,19 +91,39 @@ async function processInboxLabelChange(value) {
 
   if (!isSavedTemplateLabel(labelName)) return;
 
-  try {
-    const result = await sendKitchenAlbumToUser(psid, {
-      trigger: "inbox_label",
-    });
+  await sendAlbumSafe(psid, "inbox_label", `Label "${getSavedTemplateLabelName()}"`);
+}
+
+/**
+ * Click-to-Messenger ad / m.me referral (Ads Manager Chat builder).
+ * @see https://developers.facebook.com/docs/messenger-platform/reference/webhook-events/messaging_referrals
+ */
+async function processMessagingReferral(event) {
+  const psid = event.sender?.id;
+  const referral = event.referral ?? event.postback?.referral;
+
+  if (!psid || !referral) return;
+  if (!isMatchingAdReferral(referral)) {
     console.log(
-      `Label "${getSavedTemplateLabelName()}" → sent ${result.imageCount} images to ${psid} (${result.mode})`
+      `Ad referral ignored for ${psid} (source=${referral.source}, ad_id=${referral.ad_id ?? "n/a"})`
     );
-  } catch (error) {
-    console.error("Failed to send photos for inbox label:", error.message);
+    return;
   }
+
+  await sendAlbumSafe(psid, "ad_referral", "Click-to-Messenger ad");
 }
 
 async function processMessagingEvent(event) {
+  const senderId = event.sender?.id;
+
+  if (senderId && (event.referral || event.postback?.referral)) {
+    await processMessagingReferral(event);
+  }
+
+  if (event.postback && !event.message) {
+    return;
+  }
+
   const message = event.message;
   if (!message) return;
 
@@ -113,22 +134,17 @@ async function processMessagingEvent(event) {
     return;
   }
 
-  const senderId = event.sender?.id;
   if (!senderId) return;
+
+  if (message.referral && isMatchingAdReferral(message.referral)) {
+    await sendAlbumSafe(senderId, "ad_referral_message", "Ad referral on first message");
+    return;
+  }
 
   const text = message.text;
   if (!text || !isKitchenTextTrigger(text)) return;
 
-  try {
-    const result = await sendKitchenAlbumToUser(senderId, {
-      trigger: "customer_text",
-    });
-    console.log(
-      `Text trigger → sent ${result.imageCount} images to ${senderId} (${result.mode})`
-    );
-  } catch (error) {
-    console.error("Failed to handle customer text:", error.message);
-  }
+  await sendAlbumSafe(senderId, "customer_text", "Customer text trigger");
 }
 
 /**
@@ -141,14 +157,21 @@ async function processPageEcho(event) {
   if (!recipientId || !text) return;
   if (!isSavedTemplateEcho(text)) return;
 
+  await sendAlbumSafe(recipientId, "saved_reply_echo", "Saved reply echo");
+}
+
+/**
+ * @param {string} psid
+ * @param {string} trigger
+ * @param {string} label
+ */
+async function sendAlbumSafe(psid, trigger, label) {
   try {
-    const result = await sendKitchenAlbumToUser(recipientId, {
-      trigger: "saved_reply_echo",
-    });
+    const result = await sendKitchenAlbumToUser(psid, { trigger });
     console.log(
-      `Saved reply echo → sent ${result.imageCount} images to ${recipientId} (${result.mode})`
+      `${label} → sent ${result.imageCount} images to ${psid} (${result.mode})`
     );
   } catch (error) {
-    console.error("Failed to handle saved reply echo:", error.message);
+    console.error(`Failed (${trigger}) for ${psid}:`, error.message);
   }
 }
