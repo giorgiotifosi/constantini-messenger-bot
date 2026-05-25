@@ -1,18 +1,10 @@
 import { waitUntil } from "@vercel/functions";
-import { sendKitchenAlbumOnChatOpen } from "@/lib/messenger";
+import { isDuplicateWebhookBody } from "@/lib/kitchen-send-lock";
 import {
-  formatReferralForLog,
-  getAdReferralSkipReason,
-  getSavedTemplateLabelName,
-  isChatOpenReferral,
-  isKitchenTextTrigger,
-  isLabelAssignmentAction,
-  isMatchingAdReferral,
-  isSavedTemplateEcho,
-  isSavedTemplateLabel,
-  shouldSendOnAnyCustomerMessage,
-  shouldSendOnGreetingEcho,
-} from "@/lib/triggers";
+  collectKitchenSendFromInboxLabel,
+  collectKitchenSendsFromMessagingEvent,
+  flushPendingKitchenSends,
+} from "@/lib/webhook-handlers";
 
 /** Allow time to upload many images on Vercel (Pro: up to 60s). */
 export const maxDuration = 60;
@@ -54,8 +46,26 @@ export async function POST(request) {
     return new Response("Not Found", { status: 404 });
   }
 
+  if (isDuplicateWebhookBody(body)) {
+    return new Response("EVENT_RECEIVED", { status: 200 });
+  }
+
   const entries = body.entry ?? [];
   console.log(`Webhook: ${entries.length} entries`);
+
+  waitUntil(processWebhookEntries(entries));
+
+  return new Response("EVENT_RECEIVED", { status: 200 });
+}
+
+/**
+ * Scan all events first, then send at most once per PSID (avoids referral + echo double fire).
+ * @param {Array<Record<string, unknown>>} entries
+ */
+async function processWebhookEntries(entries) {
+  const batchSent = new Set();
+  /** @type {Map<string, import('@/lib/webhook-handlers').PendingKitchenSend>} */
+  const pending = new Map();
 
   for (const entry of entries) {
     console.log(
@@ -64,27 +74,23 @@ export async function POST(request) {
 
     for (const change of entry.changes ?? []) {
       if (change.field === "inbox_labels") {
-        waitUntil(processInboxLabelChange(change.value));
+        collectKitchenSendFromInboxLabel(change.value, pending);
       }
     }
 
     for (const event of entry.messaging ?? []) {
-      waitUntil(processMessagingEvent(event));
+      logEventSummary(event);
+      collectKitchenSendsFromMessagingEvent(event, pending);
     }
   }
 
-  return new Response("EVENT_RECEIVED", { status: 200 });
-}
+  if (pending.size > 0) {
+    console.log(
+      `Kitchen sends queued: ${[...pending.values()].map((p) => `${p.psid}:${p.trigger}`).join(", ")}`
+    );
+  }
 
-async function processInboxLabelChange(value) {
-  const psid = value?.user?.id;
-  const labelName = value?.label?.page_label_name;
-  const action = value?.action;
-
-  if (!psid || !labelName || !isLabelAssignmentAction(action)) return;
-  if (!isSavedTemplateLabel(labelName)) return;
-
-  await sendAlbumSafe(psid, "inbox_label", `Label ${getSavedTemplateLabelName()}`);
+  await flushPendingKitchenSends(pending, batchSent);
 }
 
 function logEventSummary(event) {
@@ -99,97 +105,4 @@ function logEventSummary(event) {
       text: event.message?.text?.slice(0, 50),
     })
   );
-}
-
-/**
- * Chat opened from Click-to-Messenger ad — send album immediately (no user reply).
- */
-async function handleChatOpen(psid, source, detail) {
-  console.log(`CHAT OPEN (${source}) psid=${psid} ${detail}`);
-  await sendAlbumSafe(psid, "chat_open", source);
-}
-
-async function processMessagingEvent(event) {
-  logEventSummary(event);
-
-  const psid = event.sender?.id;
-  if (!psid) return;
-
-  const referral = event.referral ?? event.postback?.referral ?? event.message?.referral;
-
-  // 1) Ad click → chat open (messaging_referrals)
-  if (referral && isChatOpenReferral(referral)) {
-    console.log(`Referral payload: ${formatReferralForLog(referral)}`);
-    if (isMatchingAdReferral(referral)) {
-      await handleChatOpen(psid, "ad_referral", "matched");
-      if (!event.message) return;
-    } else {
-      console.log(
-        `Referral ignored for ${psid}: ${getAdReferralSkipReason(referral)}`
-      );
-    }
-  }
-
-  // 2) Messenger opt-in (some ad / plugin flows)
-  if (event.optin) {
-    await handleChatOpen(psid, "optin", event.optin.type ?? "");
-    return;
-  }
-
-  // 3) Postback with ad referral (Get Started from ad)
-  if (event.postback?.referral && isMatchingAdReferral(event.postback.referral)) {
-    await handleChatOpen(psid, "postback_referral", event.postback.title ?? "");
-    if (!event.message) return;
-  }
-
-  const message = event.message;
-  if (!message) return;
-
-  // 4) Chat builder greeting sent by Page (needs message_echoes + often Connect App)
-  if (message.is_echo) {
-    const recipientId = event.recipient?.id;
-    const text = message.text;
-    if (
-      recipientId &&
-      text &&
-      shouldSendOnGreetingEcho() &&
-      isSavedTemplateEcho(text)
-    ) {
-      console.log(`Chat builder echo → ${recipientId}`);
-      await sendAlbumSafe(
-        recipientId,
-        "chat_builder_echo",
-        "greeting echo"
-      );
-    } else if (recipientId && text) {
-      console.log(
-        `Greeting echo skipped for ${recipientId} (strict: use MESSENGER_AD_IDS)`
-      );
-    }
-    return;
-  }
-
-  // 5) Fallback: customer typed (disabled by default)
-  const text = message.text;
-  if (!text) return;
-
-  if (shouldSendOnAnyCustomerMessage()) {
-    await sendAlbumSafe(psid, "customer_text", text.slice(0, 30));
-    return;
-  }
-
-  if (isKitchenTextTrigger(text)) {
-    await sendAlbumSafe(psid, "keyword", "სამზარეულო");
-  }
-}
-
-async function sendAlbumSafe(psid, trigger, label) {
-  try {
-    const result = await sendKitchenAlbumOnChatOpen(psid);
-    console.log(
-      `${label} → ${result.imageCount} images (${result.mode}) trigger=${trigger}`
-    );
-  } catch (error) {
-    console.error(`FAILED ${label} psid=${psid}:`, error.message);
-  }
 }
