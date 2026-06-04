@@ -100,7 +100,8 @@ Set `MESSENGER_AD_IDS`, `MESSENGER_AD_REF`, or `MESSENGER_AD_SEND_ON_ALL=true` i
 | Source | Bot behavior |
 |--------|--------------|
 | Tap **სამზარეულო** | Kitchen album (`KITCHEN_IMAGE_URLS`) |
-| Tap **რბილი ავეჯი** | Divan album (`SOFT_FURNITURE_IMAGE_URLS`) |
+| Tap **რბილი ავეჯი** | Divan album only (`SOFT_FURNITURE_IMAGE_URLS`) |
+| Postback payloads | Set `KITCHEN_POSTBACK_PAYLOAD` / `SOFT_FURNITURE_POSTBACK_PAYLOAD` in Vercel **and** Chat builder (each button unique) |
 | Ad chat open | Only if `MESSENGER_AD_IDS` / ref / `MESSENGER_AD_SEND_ON_ALL` set |
 | Greeting echo | Off (`MESSENGER_AD_GREETING_ECHO=true` to enable) |
 | Inbox label | Optional (`inbox_labels`) |
