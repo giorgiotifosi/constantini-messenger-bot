@@ -14,7 +14,9 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 |----------|----------|-------------|
 | `PAGE_ACCESS_TOKEN` | Yes | Page access token from Meta Developer Console |
 | `VERIFY_TOKEN` | Yes | Any secret string you choose; must match webhook setup |
-| `KITCHEN_BUTTON_LABEL` | No | Chat builder button text (default **სამზარეულო**) — tap sends photos |
+| `KITCHEN_BUTTON_LABEL` | No | Kitchen button (default **სამზარეულო**) → `KITCHEN_IMAGE_URLS` album |
+| `SOFT_FURNITURE_BUTTON_LABEL` | No | Soft furniture button (default **რბილი ავეჯი**) → `SOFT_FURNITURE_IMAGE_URLS` album |
+| `SOFT_FURNITURE_IMAGE_URLS` | No* | Up to 30 divan photo URLs (same format as kitchen) |
 | `MESSENGER_AD_IDS` | No | Optional: only these ad IDs trigger photos on **chat open** |
 | `MESSENGER_AD_REF` | No | Optional ref param for chat-open filter |
 | `MESSENGER_AD_TITLE_KEYWORD` | No | Optional: match `ad_title` from webhook |
@@ -97,7 +99,8 @@ Set `MESSENGER_AD_IDS`, `MESSENGER_AD_REF`, or `MESSENGER_AD_SEND_ON_ALL=true` i
 
 | Source | Bot behavior |
 |--------|--------------|
-| Tap / type **სამზარეულო** | Sends photos (default) |
+| Tap **სამზარეულო** | Kitchen album (`KITCHEN_IMAGE_URLS`) |
+| Tap **რბილი ავეჯი** | Divan album (`SOFT_FURNITURE_IMAGE_URLS`) |
 | Ad chat open | Only if `MESSENGER_AD_IDS` / ref / `MESSENGER_AD_SEND_ON_ALL` set |
 | Greeting echo | Off (`MESSENGER_AD_GREETING_ECHO=true` to enable) |
 | Inbox label | Optional (`inbox_labels`) |

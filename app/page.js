@@ -15,8 +15,9 @@ export default function Home() {
         <code>/api/webhook</code>
       </p>
       <p>
-        Opens from your Click-to-Messenger ad — tap <strong>სამზარეულო</strong>{" "}
-        to receive up to 30 kitchen photos (one message per photo).
+        Tap <strong>სამზარეულო</strong> for kitchen photos or{" "}
+        <strong>რბილი ავეჯი</strong> for divan photos — up to 30 images per
+        button, sent as one album.
       </p>
       <p>
         <a href="/privacy">Privacy Policy</a>
