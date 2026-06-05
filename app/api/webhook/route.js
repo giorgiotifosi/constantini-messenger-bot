@@ -86,7 +86,7 @@ async function processWebhookEntries(entries) {
 
   if (pending.size > 0) {
     console.log(
-      `Kitchen sends queued: ${[...pending.values()].map((p) => `${p.psid}:${p.trigger}`).join(", ")}`
+      `Album sends queued: ${[...pending.values()].map((p) => `${p.psid}:${p.catalogId}:${p.trigger}`).join(", ")}`
     );
   }
 
@@ -94,15 +94,18 @@ async function processWebhookEntries(entries) {
 }
 
 function logEventSummary(event) {
+  const postback = event.postback;
   console.log(
     JSON.stringify({
       sender: event.sender?.id,
       recipient: event.recipient?.id,
       referral_only: Boolean(event.referral && !event.message),
       optin: Boolean(event.optin),
-      postback: Boolean(event.postback),
+      postback: Boolean(postback),
+      postback_title: postback?.title,
+      postback_payload: postback?.payload,
       echo: Boolean(event.message?.is_echo),
-      text: event.message?.text?.slice(0, 50),
+      text: event.message?.text?.slice(0, 80),
     })
   );
 }
