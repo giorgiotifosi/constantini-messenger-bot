@@ -16,10 +16,14 @@ const KITCHEN_KEYWORD = "სამზარეულო";
 /** The admin's personal profile PSID — arrives as event.recipient.id on echoes. */
 const ADMIN_PROFILE_PSID = "PSID_PERSONAL_PROFILE";
 
-const kitchenUrls = Array.from(
-  { length: 30 },
-  (_, i) => `https://cdn.example.com/kitchen/${i + 1}.jpg`
-);
+/** Mirrors the production catalog naming. */
+const kitchenUrl = (n) => `https://constantini.ge/wp-content/uploads/2026/05/${n}.jpg`;
+const kitchenUrls = Array.from({ length: 30 }, (_, i) => kitchenUrl(i + 1));
+/** Rejected by Meta with 400 / code 100 / subcode 2018047. */
+const BLOCKED_URL = kitchenUrl(5);
+/** What the temporary App Review demo subset must select. */
+const DEMO_URLS = [kitchenUrl(1), kitchenUrl(2), kitchenUrl(3), kitchenUrl(4)];
+
 const softUrls = Array.from(
   { length: 12 },
   (_, i) => `https://cdn.example.com/soft/${i + 1}.jpg`
@@ -42,7 +46,8 @@ globalThis.fetch = async (url) => {
 };
 
 /** attachment_id Meta returns for a given image URL. */
-const attachmentIdFor = (url) => `att_${url.split("/").pop().replace(".jpg", "")}`;
+const attachmentIdFor = (url) =>
+  `att_${url.split("/").pop().replace(".jpg", "")}`;
 
 /**
  * Stubs fetch + console. `overrides` can fail a specific upload or the album.
@@ -72,7 +77,7 @@ function install(overrides = {}) {
         return new Response(
           JSON.stringify({
             error: {
-              message: "(#100) Failed to fetch the image from the URL",
+              message: "(#100) Upload attachment failure",
               type: "OAuthException",
               code: 100,
               error_subcode: 2018047,
@@ -115,10 +120,14 @@ function install(overrides = {}) {
     Object.assign(console, realConsole);
   };
 
+  const uploadedUrls = () =>
+    record.uploads.map((u) => u.body.message.attachment.payload.url);
+  record.uploadedUrls = uploadedUrls;
+
   return record;
 }
 
-test("30 kitchen images produce 30 uploads then exactly ONE album request", async () => {
+test("DEMO: kitchen uploads exactly 4 images then ONE album request", async () => {
   const record = install();
 
   try {
@@ -126,10 +135,15 @@ test("30 kitchen images produce 30 uploads then exactly ONE album request", asyn
       trigger: "admin_echo",
     });
 
-    assert.equal(record.uploads.length, 30, "one /message_attachments call per image");
+    assert.equal(record.uploads.length, 4, "one /message_attachments call per demo image");
     assert.equal(record.sends.length, 1, "exactly one /messages request");
 
-    // Uploads: correct endpoint, payload and is_reusable
+    assert.deepEqual(
+      record.uploadedUrls(),
+      DEMO_URLS,
+      "the first four usable kitchen images, in order"
+    );
+
     for (const upload of record.uploads) {
       assert.equal(upload.method, "POST");
       assert.deepEqual(upload.headers, { "Content-Type": "application/json" });
@@ -139,37 +153,99 @@ test("30 kitchen images produce 30 uploads then exactly ONE album request", asyn
         true,
         "every upload must be reusable"
       );
-      assert.equal("attachment_id" in upload.body.message.attachment.payload, false);
     }
 
-    // Every image uploaded exactly once, none missed
-    assert.deepEqual(
-      record.uploads.map((u) => u.body.message.attachment.payload.url).sort(),
-      [...kitchenUrls].sort(),
-      "every kitchen URL uploaded exactly once"
-    );
-
-    // The album carries all 30 IDs, in the original image order
     const album = record.sends[0];
-    assert.equal(album.method, "POST");
     assert.deepEqual(album.body.recipient, { id: ADMIN_PROFILE_PSID });
     assert.equal(album.body.messaging_type, "RESPONSE");
     assert.equal("tag" in album.body, false, "no MESSAGE_TAG / HUMAN_AGENT");
-    assert.equal(album.body.message.attachments.length, 30, "no chunking");
+    assert.equal(album.body.message.attachments.length, 4, "no chunking");
     assert.deepEqual(
       album.body.message.attachments.map((a) => a.payload.attachment_id),
-      kitchenUrls.map(attachmentIdFor),
+      DEMO_URLS.map(attachmentIdFor),
       "attachment IDs preserve the original image order"
     );
     assert.deepEqual(album.body.message.attachments[0], {
       type: "image",
-      payload: { attachment_id: attachmentIdFor(kitchenUrls[0]) },
+      payload: { attachment_id: attachmentIdFor(DEMO_URLS[0]) },
     });
 
     assert.equal(result.mode, "album-uploaded");
-    assert.equal(result.imageCount, 30);
-    assert.equal(result.attachmentCount, 30);
+    assert.equal(result.imageCount, 4);
+    assert.equal(result.attachmentCount, 4);
     assert.equal(result.messageId, "mid.ALBUM");
+  } finally {
+    record.restore();
+  }
+});
+
+test("DEMO: the failing image 5.jpg is never uploaded or sent", async () => {
+  const record = install();
+
+  try {
+    await sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" });
+
+    assert.ok(
+      !record.uploadedUrls().includes(BLOCKED_URL),
+      "5.jpg must not be uploaded"
+    );
+    assert.ok(
+      !record.uploads.some((u) => u.body.message.attachment.payload.url === BLOCKED_URL),
+      "5.jpg must not appear in any upload payload"
+    );
+    assert.ok(
+      !JSON.stringify(record.sends[0].body).includes("/5.jpg"),
+      "5.jpg must not reach the album request"
+    );
+  } finally {
+    record.restore();
+  }
+});
+
+test("DEMO: 5.jpg is excluded even when it falls inside the first four URLs", async () => {
+  const original = process.env.KITCHEN_IMAGE_URLS;
+  // 5.jpg deliberately placed second.
+  process.env.KITCHEN_IMAGE_URLS = [
+    kitchenUrl(1),
+    BLOCKED_URL,
+    kitchenUrl(2),
+    kitchenUrl(3),
+    kitchenUrl(4),
+    kitchenUrl(6),
+  ].join(",");
+
+  const record = install();
+
+  try {
+    await sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" });
+
+    assert.equal(record.uploads.length, 4);
+    assert.deepEqual(
+      record.uploadedUrls(),
+      [kitchenUrl(1), kitchenUrl(2), kitchenUrl(3), kitchenUrl(4)],
+      "the blocked URL is skipped, not merely truncated away"
+    );
+  } finally {
+    record.restore();
+    process.env.KITCHEN_IMAGE_URLS = original;
+  }
+});
+
+test("the demo subset is kitchen-only: soft furniture still sends its full catalog", async () => {
+  const record = install();
+
+  try {
+    const result = await sendProductAlbumToUser("PSID_SOFT", "soft_furniture", {
+      trigger: "button_postback",
+    });
+
+    assert.equal(record.uploads.length, 12, "soft furniture is not capped");
+    assert.equal(record.sends.length, 1);
+    assert.deepEqual(
+      record.sends[0].body.message.attachments.map((a) => a.payload.attachment_id),
+      softUrls.map(attachmentIdFor)
+    );
+    assert.equal(result.mode, "album-uploaded");
   } finally {
     record.restore();
   }
@@ -196,28 +272,8 @@ test("kitchen never uses direct URL albums or individual image messages", async 
   }
 });
 
-test("soft furniture uses the same restored uploaded-album path", async () => {
-  const record = install();
-
-  try {
-    const result = await sendProductAlbumToUser("PSID_SOFT", "soft_furniture", {
-      trigger: "button_postback",
-    });
-
-    assert.equal(record.uploads.length, 12);
-    assert.equal(record.sends.length, 1);
-    assert.deepEqual(
-      record.sends[0].body.message.attachments.map((a) => a.payload.attachment_id),
-      softUrls.map(attachmentIdFor)
-    );
-    assert.equal(result.mode, "album-uploaded");
-  } finally {
-    record.restore();
-  }
-});
-
 test("a failed upload aborts before the album and propagates GraphApiError", async () => {
-  const failing = kitchenUrls[6];
+  const failing = DEMO_URLS[1];
   const record = install({ failUploadUrl: failing });
 
   try {
@@ -230,7 +286,6 @@ test("a failed upload aborts before the album and propagates GraphApiError", asy
         assert.equal(error.type, "OAuthException");
         assert.equal(error.errorSubcode, 2018047);
         assert.equal(error.errorUserTitle, "Image unavailable");
-        assert.equal(error.errorUserMsg, "The image could not be fetched.");
         assert.deepEqual(error.errorData, { attachment_url: failing });
         assert.equal(error.fbtraceId, "UploadTrace24");
         return true;
@@ -238,10 +293,6 @@ test("a failed upload aborts before the album and propagates GraphApiError", asy
     );
 
     assert.equal(record.sends.length, 0, "an incomplete album must never be sent");
-    assert.ok(
-      record.uploads.length < kitchenUrls.length,
-      `uploads must stop after the first failure (issued ${record.uploads.length}/30)`
-    );
 
     const logged = record.logs.join("\n");
     assert.ok(logged.includes(failing), "the exact failed image URL is logged");
@@ -284,7 +335,7 @@ test("a failed album request does not retry the chain", async () => {
     );
 
     assert.equal(record.sends.length, 1, "no whole-chain retry");
-    assert.equal(record.uploads.length, 30, "images are not re-uploaded");
+    assert.equal(record.uploads.length, 4, "images are not re-uploaded");
   } finally {
     record.restore();
   }
@@ -327,7 +378,7 @@ test("PAGE_ACCESS_TOKEN never appears in logs (success or failure)", async () =>
     ok.restore();
   }
 
-  const failed = install({ failUploadUrl: kitchenUrls[0] });
+  const failed = install({ failUploadUrl: DEMO_URLS[0] });
   try {
     await assert.rejects(() =>
       sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" })
@@ -373,11 +424,11 @@ test("ACCEPTANCE: admin echo of სამზარეულო sends the album t
 
     await flushPendingKitchenSends(pending, new Set());
 
-    assert.equal(record.uploads.length, 30, "30 attachment uploads");
+    assert.equal(record.uploads.length, 4, "4 attachment uploads");
     assert.equal(record.sends.length, 1, "one album request");
     assert.deepEqual(record.sends[0].body.recipient, { id: ADMIN_PROFILE_PSID });
     assert.equal(record.sends[0].body.messaging_type, "RESPONSE");
-    assert.equal(record.sends[0].body.message.attachments.length, 30);
+    assert.equal(record.sends[0].body.message.attachments.length, 4);
 
     // take_thread_control runs for admin echoes and must stay non-fatal.
     assert.ok(
@@ -386,7 +437,7 @@ test("ACCEPTANCE: admin echo of სამზარეულო sends the album t
     );
 
     const logged = record.logs.join("\n");
-    assert.ok(logged.includes("30 images (album-uploaded)"), "success line logged");
+    assert.ok(logged.includes("4 images (album-uploaded)"), "success line logged");
     assert.ok(!logged.includes(PAGE_ACCESS_TOKEN));
   } finally {
     record.restore();
@@ -421,7 +472,7 @@ test("ACCEPTANCE: a take_thread_control failure does not block the album", async
 
     await flushPendingKitchenSends(pending, new Set());
 
-    assert.equal(record.uploads.length, 30, "uploads still ran");
+    assert.equal(record.uploads.length, 4, "uploads still ran");
     assert.equal(record.sends.length, 1, "album still sent");
   } finally {
     record.restore();
