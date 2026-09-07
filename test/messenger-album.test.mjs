@@ -50,11 +50,15 @@ const attachmentIdFor = (url) =>
   `att_${url.split("/").pop().replace(".jpg", "")}`;
 
 /**
- * Stubs fetch + console. `overrides` can fail a specific upload or the album.
- * @param {{ failUploadUrl?: string, albumResponse?: () => Response }} [overrides]
+ * Stubs fetch + console. `overrides` can fail one or more uploads, or the album.
+ * @param {{ failUploadUrl?: string, failUploadUrls?: string[], albumResponse?: () => Response }} [overrides]
  */
 function install(overrides = {}) {
   const record = { uploads: [], sends: [], other: [], logs: [] };
+
+  const failingUploadUrls = new Set(
+    overrides.failUploadUrls ?? (overrides.failUploadUrl ? [overrides.failUploadUrl] : [])
+  );
 
   const realFetch = globalThis.fetch;
   const realConsole = { log: console.log, warn: console.warn, error: console.error };
@@ -73,7 +77,7 @@ function install(overrides = {}) {
       record.uploads.push(call);
       const imageUrl = body?.message?.attachment?.payload?.url;
 
-      if (overrides.failUploadUrl && imageUrl === overrides.failUploadUrl) {
+      if (failingUploadUrls.has(imageUrl)) {
         return new Response(
           JSON.stringify({
             error: {
@@ -276,32 +280,110 @@ test("kitchen never uses direct URL albums or individual image messages", async 
   }
 });
 
-test("a failed upload aborts before the album and propagates GraphApiError", async () => {
+test("one failed upload is skipped — the remaining images still send as one album", async () => {
   const failing = DEMO_URLS[1];
   const record = install({ failUploadUrl: failing });
 
   try {
-    await assert.rejects(
-      () => sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" }),
-      (error) => {
-        assert.ok(error instanceof GraphApiError, "original GraphApiError propagates");
-        assert.equal(error.status, 400);
-        assert.equal(error.code, 100);
-        assert.equal(error.type, "OAuthException");
-        assert.equal(error.errorSubcode, 2018047);
-        assert.equal(error.errorUserTitle, "Image unavailable");
-        assert.deepEqual(error.errorData, { attachment_url: failing });
-        assert.equal(error.fbtraceId, "UploadTrace24");
-        return true;
-      }
+    const expectedUrls = DEMO_URLS.filter((url) => url !== failing);
+    const result = await sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", {
+      trigger: "admin_echo",
+    });
+
+    assert.equal(
+      record.uploads.length,
+      DEMO_URLS.length,
+      "every image is still attempted, including after the failure"
+    );
+    assert.equal(record.sends.length, 1, "the album still sends despite one failed upload");
+
+    const album = record.sends[0];
+    assert.deepEqual(
+      album.body.message.attachments.map((a) => a.payload.attachment_id),
+      expectedUrls.map(attachmentIdFor),
+      "the failed image is skipped; the rest keep their original order"
     );
 
-    assert.equal(record.sends.length, 0, "an incomplete album must never be sent");
+    assert.equal(result.mode, "album-uploaded");
+    assert.equal(result.imageCount, DEMO_URLS.length, "imageCount reflects what was requested");
+    assert.equal(
+      result.attachmentCount,
+      expectedUrls.length,
+      "attachmentCount reflects what actually uploaded"
+    );
+    assert.equal(result.skippedCount, 1);
 
     const logged = record.logs.join("\n");
     assert.ok(logged.includes(failing), "the exact failed image URL is logged");
     assert.ok(logged.includes("UploadTrace24"), "fbtrace_id is logged");
     assert.ok(logged.includes('"error_subcode":2018047'), "full FB error is logged");
+    assert.ok(
+      logged.includes("Album uploads partially failed"),
+      "a clear partial-failure summary is logged"
+    );
+  } finally {
+    record.restore();
+  }
+});
+
+test("multiple failed uploads are skipped — remaining images send in original order", async () => {
+  // Scattered across the start, middle and end of the list.
+  const failing = [DEMO_URLS[0], DEMO_URLS[10], DEMO_URLS[DEMO_URLS.length - 1]];
+  const record = install({ failUploadUrls: failing });
+
+  try {
+    const expectedUrls = DEMO_URLS.filter((url) => !failing.includes(url));
+    const result = await sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", {
+      trigger: "admin_echo",
+    });
+
+    assert.equal(record.uploads.length, DEMO_URLS.length, "every image is still attempted");
+    assert.equal(record.sends.length, 1, "the album still sends with the successful images");
+
+    const album = record.sends[0];
+    assert.deepEqual(
+      album.body.message.attachments.map((a) => a.payload.attachment_id),
+      expectedUrls.map(attachmentIdFor),
+      "original image order is preserved among the successful uploads"
+    );
+
+    assert.equal(result.attachmentCount, expectedUrls.length);
+    assert.equal(result.skippedCount, failing.length);
+
+    const logged = record.logs.join("\n");
+    for (const url of failing) {
+      assert.ok(logged.includes(url), `failed image ${url} is logged`);
+    }
+  } finally {
+    record.restore();
+  }
+});
+
+test("every image failing aborts the send with a clear error and no album request", async () => {
+  const record = install({ failUploadUrls: DEMO_URLS });
+
+  try {
+    await assert.rejects(
+      () => sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" }),
+      (error) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /no usable attachments/i);
+        return true;
+      }
+    );
+
+    assert.equal(
+      record.uploads.length,
+      DEMO_URLS.length,
+      "every image is still attempted even though all fail"
+    );
+    assert.equal(record.sends.length, 0, "no /messages album request when nothing uploaded");
+
+    const logged = record.logs.join("\n");
+    assert.ok(
+      logged.includes("Album aborted: no usable attachments"),
+      "the all-failed case is logged clearly"
+    );
   } finally {
     record.restore();
   }
@@ -382,17 +464,28 @@ test("PAGE_ACCESS_TOKEN never appears in logs (success or failure)", async () =>
     ok.restore();
   }
 
-  const failed = install({ failUploadUrl: DEMO_URLS[0] });
+  const partiallyFailed = install({ failUploadUrl: DEMO_URLS[0] });
+  try {
+    await sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" });
+    assert.ok(
+      !partiallyFailed.logs.join("\n").includes(PAGE_ACCESS_TOKEN),
+      "token leaked into partial-failure logs"
+    );
+  } finally {
+    partiallyFailed.restore();
+  }
+
+  const allFailed = install({ failUploadUrls: DEMO_URLS });
   try {
     await assert.rejects(() =>
       sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" })
     );
     assert.ok(
-      !failed.logs.join("\n").includes(PAGE_ACCESS_TOKEN),
-      "token leaked into failure logs"
+      !allFailed.logs.join("\n").includes(PAGE_ACCESS_TOKEN),
+      "token leaked into total-failure logs"
     );
   } finally {
-    failed.restore();
+    allFailed.restore();
   }
 });
 
