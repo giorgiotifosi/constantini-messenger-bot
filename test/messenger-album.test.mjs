@@ -21,8 +21,8 @@ const kitchenUrl = (n) => `https://constantini.ge/wp-content/uploads/2026/05/${n
 const kitchenUrls = Array.from({ length: 30 }, (_, i) => kitchenUrl(i + 1));
 /** Rejected by Meta with 400 / code 100 / subcode 2018047. */
 const BLOCKED_URL = kitchenUrl(5);
-/** What the temporary App Review demo subset must select. */
-const DEMO_URLS = [kitchenUrl(1), kitchenUrl(2), kitchenUrl(3), kitchenUrl(4)];
+/** What the App Review demo subset must select: every usable kitchen URL, in order. */
+const DEMO_URLS = kitchenUrls.filter((url) => url !== BLOCKED_URL);
 
 const softUrls = Array.from(
   { length: 12 },
@@ -127,7 +127,7 @@ function install(overrides = {}) {
   return record;
 }
 
-test("DEMO: kitchen uploads exactly 4 images then ONE album request", async () => {
+test("DEMO: kitchen uploads every usable image then ONE album request", async () => {
   const record = install();
 
   try {
@@ -135,13 +135,17 @@ test("DEMO: kitchen uploads exactly 4 images then ONE album request", async () =
       trigger: "admin_echo",
     });
 
-    assert.equal(record.uploads.length, 4, "one /message_attachments call per demo image");
+    assert.equal(
+      record.uploads.length,
+      DEMO_URLS.length,
+      "one /message_attachments call per usable image"
+    );
     assert.equal(record.sends.length, 1, "exactly one /messages request");
 
     assert.deepEqual(
       record.uploadedUrls(),
       DEMO_URLS,
-      "the first four usable kitchen images, in order"
+      "every usable kitchen image, in order, excluding the blocked URL"
     );
 
     for (const upload of record.uploads) {
@@ -159,7 +163,7 @@ test("DEMO: kitchen uploads exactly 4 images then ONE album request", async () =
     assert.deepEqual(album.body.recipient, { id: ADMIN_PROFILE_PSID });
     assert.equal(album.body.messaging_type, "RESPONSE");
     assert.equal("tag" in album.body, false, "no MESSAGE_TAG / HUMAN_AGENT");
-    assert.equal(album.body.message.attachments.length, 4, "no chunking");
+    assert.equal(album.body.message.attachments.length, DEMO_URLS.length, "no chunking");
     assert.deepEqual(
       album.body.message.attachments.map((a) => a.payload.attachment_id),
       DEMO_URLS.map(attachmentIdFor),
@@ -171,8 +175,8 @@ test("DEMO: kitchen uploads exactly 4 images then ONE album request", async () =
     });
 
     assert.equal(result.mode, "album-uploaded");
-    assert.equal(result.imageCount, 4);
-    assert.equal(result.attachmentCount, 4);
+    assert.equal(result.imageCount, DEMO_URLS.length);
+    assert.equal(result.attachmentCount, DEMO_URLS.length);
     assert.equal(result.messageId, "mid.ALBUM");
   } finally {
     record.restore();
@@ -202,7 +206,7 @@ test("DEMO: the failing image 5.jpg is never uploaded or sent", async () => {
   }
 });
 
-test("DEMO: 5.jpg is excluded even when it falls inside the first four URLs", async () => {
+test("DEMO: 5.jpg is excluded wherever it falls in the configured list", async () => {
   const original = process.env.KITCHEN_IMAGE_URLS;
   // 5.jpg deliberately placed second.
   process.env.KITCHEN_IMAGE_URLS = [
@@ -219,11 +223,11 @@ test("DEMO: 5.jpg is excluded even when it falls inside the first four URLs", as
   try {
     await sendProductAlbumToUser(ADMIN_PROFILE_PSID, "kitchen", { trigger: "admin_echo" });
 
-    assert.equal(record.uploads.length, 4);
+    assert.equal(record.uploads.length, 5);
     assert.deepEqual(
       record.uploadedUrls(),
-      [kitchenUrl(1), kitchenUrl(2), kitchenUrl(3), kitchenUrl(4)],
-      "the blocked URL is skipped, not merely truncated away"
+      [kitchenUrl(1), kitchenUrl(2), kitchenUrl(3), kitchenUrl(4), kitchenUrl(6)],
+      "the blocked URL is skipped, every other configured URL is kept"
     );
   } finally {
     record.restore();
@@ -335,7 +339,7 @@ test("a failed album request does not retry the chain", async () => {
     );
 
     assert.equal(record.sends.length, 1, "no whole-chain retry");
-    assert.equal(record.uploads.length, 4, "images are not re-uploaded");
+    assert.equal(record.uploads.length, DEMO_URLS.length, "images are not re-uploaded");
   } finally {
     record.restore();
   }
@@ -424,11 +428,11 @@ test("ACCEPTANCE: admin echo of სამზარეულო sends the album t
 
     await flushPendingKitchenSends(pending, new Set());
 
-    assert.equal(record.uploads.length, 4, "4 attachment uploads");
+    assert.equal(record.uploads.length, DEMO_URLS.length, "every usable attachment uploads");
     assert.equal(record.sends.length, 1, "one album request");
     assert.deepEqual(record.sends[0].body.recipient, { id: ADMIN_PROFILE_PSID });
     assert.equal(record.sends[0].body.messaging_type, "RESPONSE");
-    assert.equal(record.sends[0].body.message.attachments.length, 4);
+    assert.equal(record.sends[0].body.message.attachments.length, DEMO_URLS.length);
 
     // take_thread_control runs for admin echoes and must stay non-fatal.
     assert.ok(
@@ -437,7 +441,10 @@ test("ACCEPTANCE: admin echo of სამზარეულო sends the album t
     );
 
     const logged = record.logs.join("\n");
-    assert.ok(logged.includes("4 images (album-uploaded)"), "success line logged");
+    assert.ok(
+      logged.includes(`${DEMO_URLS.length} images (album-uploaded)`),
+      "success line logged"
+    );
     assert.ok(!logged.includes(PAGE_ACCESS_TOKEN));
   } finally {
     record.restore();
@@ -472,7 +479,7 @@ test("ACCEPTANCE: a take_thread_control failure does not block the album", async
 
     await flushPendingKitchenSends(pending, new Set());
 
-    assert.equal(record.uploads.length, 4, "uploads still ran");
+    assert.equal(record.uploads.length, DEMO_URLS.length, "uploads still ran");
     assert.equal(record.sends.length, 1, "album still sent");
   } finally {
     record.restore();
