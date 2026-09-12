@@ -17,6 +17,8 @@ Next.js webhook bot for [Meta Facebook Messenger](https://developers.facebook.co
 | `KITCHEN_BUTTON_LABEL` | No | Kitchen button (default **სამზარეულო**) → `KITCHEN_IMAGE_URLS` album |
 | `SOFT_FURNITURE_BUTTON_LABEL` | No | Soft furniture button (default **რბილი ავეჯი**) → `SOFT_FURNITURE_IMAGE_URLS` album |
 | `SOFT_FURNITURE_IMAGE_URLS` | No* | Up to 30 divan photo URLs (same format as kitchen) |
+| `BEDROOM_BUTTON_LABEL` | No | Bedroom button (default **საძინებელი**) → `BEDROOM_IMAGE_URLS` album |
+| `BEDROOM_IMAGE_URLS` | No* | Up to 30 bedroom photo URLs (same format as kitchen) |
 | `MESSENGER_AD_IDS` | No | Optional: only these ad IDs trigger photos on **chat open** |
 | `MESSENGER_AD_REF` | No | Optional ref param for chat-open filter |
 | `MESSENGER_AD_TITLE_KEYWORD` | No | Optional: match `ad_title` from webhook |
@@ -101,8 +103,9 @@ Set `MESSENGER_AD_IDS`, `MESSENGER_AD_REF`, or `MESSENGER_AD_SEND_ON_ALL=true` i
 |--------|--------------|
 | Tap **სამზარეულო** | Kitchen album (`KITCHEN_IMAGE_URLS`) |
 | Tap **რბილი ავეჯი** | Divan album only (`SOFT_FURNITURE_IMAGE_URLS`) |
-| **Page admin** types **სამზარეულო** / **რბილი ავეჯი** in Inbox | Customer gets that album (`message_echoes`, default on) |
-| Postback payloads | Set `KITCHEN_POSTBACK_PAYLOAD` / `SOFT_FURNITURE_POSTBACK_PAYLOAD` in Vercel **and** Chat builder (each button unique) |
+| Tap **საძინებელი** | Bedroom album only (`BEDROOM_IMAGE_URLS`) |
+| **Page admin** types **სამზარეულო** / **რბილი ავეჯი** / **საძინებელი** in Inbox | Customer gets that album (`message_echoes`, default on) |
+| Postback payloads | Set `KITCHEN_POSTBACK_PAYLOAD` / `SOFT_FURNITURE_POSTBACK_PAYLOAD` / `BEDROOM_POSTBACK_PAYLOAD` in Vercel **and** Chat builder (each button unique) |
 | Ad chat open | Only if `MESSENGER_AD_IDS` / ref / `MESSENGER_AD_SEND_ON_ALL` set |
 | Greeting echo | Off (`MESSENGER_AD_GREETING_ECHO=true` to enable) |
 | Inbox label | Optional (`inbox_labels`) |
